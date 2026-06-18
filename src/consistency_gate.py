@@ -201,41 +201,69 @@ def check_title_vs_current_company_history(candidate: dict) -> tuple[bool, str]:
     return False, ""
 
 
-# All checks, in order. Each check is independent and explainable on its own.
+# Replace the CHECKS list and score_candidate function with the versions below.
+
+# Each check now carries a severity tier alongside its point penalty:
+#   "hard"  -> deterministic, no-benign-explanation evidence. A single hard
+#              flag is sufficient on its own to call a candidate a likely
+#              honeypot, regardless of the numeric score.
+#   "soft"  -> circumstantial evidence that's individually forgivable (lots
+#              of real, non-fraudulent candidates trip these) but still
+#              informative in combination with other flags.
+#
+# This directly encodes the design judgment: an 11-year experience gap or
+# an "expert" skill claim with zero months of usage needs no corroboration
+# to be disqualifying. An unverified email or a quiet job-seeker does.
+
 CHECKS = [
-    ("experience_arithmetic", check_experience_arithmetic, 30),
-    ("skill_vs_assessment", check_skill_claim_vs_assessment, 30),
-    ("endorsement_inflation", check_endorsement_inflation, 15),
-    ("activity_vs_availability", check_activity_vs_availability, 10),
-    ("verification_baseline", check_verification_baseline, 5),
-    ("title_history_mismatch", check_title_vs_current_company_history, 10),
+    ("experience_arithmetic", check_experience_arithmetic, 30, "hard"),
+    ("skill_vs_assessment", check_skill_claim_vs_assessment, 30, "hard"),
+    ("endorsement_inflation", check_endorsement_inflation, 15, "soft"),
+    ("activity_vs_availability", check_activity_vs_availability, 10, "soft"),
+    ("verification_baseline", check_verification_baseline, 5, "soft"),
+    ("title_history_mismatch", check_title_vs_current_company_history, 10, "soft"),
 ]
 
 
 def score_candidate(candidate: dict) -> ConsistencyResult:
     """Run all checks, deduct weighted penalties, return a 0-100 plausibility score.
 
+    Honeypot classification uses two independent paths, not just the score:
+      1. ANY single "hard" flag (experience_arithmetic, skill_vs_assessment)
+         is sufficient on its own -> is_likely_honeypot = True, regardless
+         of the numeric score. These are deterministic, no-benign-
+         explanation signals; they don't need corroboration.
+      2. Otherwise, fall back to the aggregate score threshold (< 40) as
+         before -> catches cases where multiple "soft" signals stack up
+         even though none alone is damning.
+
     Threshold guidance (tune empirically against your hand-labeled set):
       score >= 70  -> plausible, pass to fit scoring normally
       40-70        -> plausible but flagged, fit score gets dampened
       < 40         -> likely honeypot, excluded from top 100 entirely
+      (any hard flag) -> likely honeypot, excluded, irrespective of score
     """
     cid = candidate.get("candidate_id", "UNKNOWN")
     score = 100.0
     flags: list[str] = []
+    hard_flag_fired = False
 
-    for name, check_fn, penalty in CHECKS:
+    for name, check_fn, penalty, tier in CHECKS:
         violated, detail = check_fn(candidate)
         if violated:
             score -= penalty
             flags.append(f"[{name}] {detail}")
+            if tier == "hard":
+                hard_flag_fired = True
 
     score = max(0.0, score)
+    is_honeypot = hard_flag_fired or score < 40
+
     return ConsistencyResult(
         candidate_id=cid,
         consistency_score=score,
         flags=flags,
-        is_likely_honeypot=score < 40,
+        is_likely_honeypot=is_honeypot,
     )
 
 
