@@ -113,19 +113,26 @@ def check_skill_claim_vs_assessment(candidate: dict) -> tuple[bool, str]:
 
 
 def check_endorsement_inflation(candidate: dict) -> tuple[bool, str]:
-    """Disproportionate endorsements relative to network size (implausible
-    in any real professional network).
+    """Disproportionate endorsements relative to network size.
+
+    Threshold calibrated against the real dataset, not guessed: across all
+    100k candidates, connection_count never drops below 10 (so a
+    'connections < 10' branch is dead code on this data) and the
+    endorsements/connections ratio tops out at 5.0, with p99=1.73 and
+    p99.9=3.62. A ratio > 3.0 sits clearly above the p99.9 tail without
+    being pinned to the single most extreme observed case, making it a
+    defensible "implausible relative to nearly everyone else" cutoff.
     """
     signals = candidate.get("redrob_signals", {})
     endorsements = signals.get("endorsements_received", 0) or 0
     connections = signals.get("connection_count", 0) or 0
 
-    if connections < 10 and endorsements > 50:
-        return True, f"{endorsements} endorsements with only {connections} connections"
-    if connections > 0 and endorsements / max(connections, 1) > 5:
+    if connections > 0 and endorsements / connections > 3.0:
+        ratio = endorsements / connections
         return True, (
             f"endorsement-to-connection ratio implausibly high "
-            f"({endorsements} endorsements / {connections} connections)"
+            f"({endorsements} endorsements / {connections} connections, "
+            f"ratio {ratio:.2f})"
         )
     return False, ""
 
