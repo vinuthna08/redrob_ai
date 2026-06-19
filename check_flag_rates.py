@@ -37,8 +37,8 @@ def main():
                          help="optional cap for a quick sample run")
     args = parser.parse_args()
 
-    counts = {name: 0 for name, _, _ in CHECKS}
-    examples = {name: [] for name, _, _ in CHECKS}
+    counts = {name: 0 for name, _, _, _ in CHECKS}
+    examples = {name: [] for name, _, _, _ in CHECKS}
     total = 0
 
     for i, candidate in enumerate(load_candidates(args.candidates)):
@@ -55,12 +55,12 @@ def main():
     print(f"Total candidates scanned: {total}\n")
     print(f"{'Rule':<28} {'Fired':>8} {'Rate':>8}")
     print("-" * 48)
-    for name, _, _ in CHECKS:
+    for name, _,_, _ in CHECKS:
         rate = counts[name] / total * 100 if total else 0
         print(f"{name:<28} {counts[name]:>8} {rate:>7.2f}%")
 
     print("\nSample fires per rule (up to 3 each):")
-    for name, _, _ in CHECKS:
+    for name, _,_, _ in CHECKS:
         print(f"\n[{name}]")
         if not examples[name]:
             print("  (none fired)")
