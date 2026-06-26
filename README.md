@@ -1,51 +1,151 @@
-# Redrob Hackathon — Candidate Ranking System
+# redrob_hackathon — Intelligent Candidate Discovery & Ranking
 
-## Status
-- [x] Stage A: consistency gate (`src/consistency_gate.py`) — tested
-- [x] Stage B: JD-specific disqualifiers (`src/jd_disqualifiers.py`) — tested
-- [ ] Stage C: embedding-based fit scoring (owner: Person B)
-- [ ] JSONL loader for candidates.jsonl.gz
-- [ ] Score combination + CSV writer (must match validate_submission.py exactly)
-- [ ] Reasoning string generator (template off real feature values, no LLM calls)
-- [ ] Sandbox deployment (HF Spaces / Colab)
+Ranks the top 100 candidates from a 100K-candidate pool against the
+"Senior AI Engineer — Founding Team" job description, for the Redrob
+INDIA RUNS hackathon (Intelligent Candidate Discovery & Ranking Challenge).
 
-## Design principles (defend these in the Stage 5 interview)
-1. Consistency (Stage A) and JD-fit-disqualifiers (Stage B) are kept SEPARATE
-   from fit scoring (Stage C), not blended into one score. A well-faked
-   honeypot should never be able to mathematically outscore a real candidate
-   by looking good on fit alone — it has to survive A and B first.
-2. Stage B rules are pulled verbatim from explicit statements in
-   job_description.md, not inferred. Cite the JD line for each rule.
-3. No LLM calls anywhere in the timed ranking step (5min/16GB/CPU-only/no
-   network, per submission_spec.md Section 3). Reasoning strings are
-   templated from the same feature values that drove the score — this also
-   means they can never contradict the rank (Stage 4 check).
-4. Every rule/check has a unit test with a passing fixture and a failing
-   fixture. See tests/test_stage_a_b.py for the pattern — keep using it.
+## Architecture
 
-## Validator gotchas (from validate_submission.py — read literally, not from
-the prose spec)
-- Tie-break on equal scores is candidate_id ASCENDING ONLY. Don't rely on a
-  secondary model signal for ties unless you also sort by candidate_id after.
-- `rank` must serialize as a clean int string ("1" not "1.0" or "01"). If
-  writing from pandas, explicitly cast the rank column to int before
-  `to_csv()` — pandas will silently float-cast otherwise and every row fails.
-- Exactly 100 data rows, ranks 1-100 each exactly once, header must match
-  `candidate_id,rank,score,reasoning` exactly.
+Three independent, explainable stages, each with its own design rationale
+documented in its module docstring:
 
-## Run tests
+- **Stage A — `src/consistency_gate.py`**: detects honeypot/implausible
+  profiles (e.g. an 11-year experience gap, "expert" skills with zero
+  months used). Six checks, tiered hard/soft: a single "hard" flag
+  (deterministic, no-benign-explanation evidence) is sufficient for
+  honeypot classification on its own; "soft" flags (circumstantial,
+  individually forgivable) require accumulation past a score threshold.
+
+- **Stage B — `src/jd_disqualifiers.py`**: seven rules pulled directly
+  from explicit statements in the JD's "things we explicitly do NOT
+  want" / "disqualifiers we actually apply" sections. Multiplicative
+  penalties, each independently explainable.
+
+- **Stage C — `src/fit_scoring.py`**: blends sentence-transformers
+  embedding similarity (candidate career narrative vs JD substance) with
+  a structured `relevant_career_fraction` signal (share of career months
+  in genuinely ML/AI/retrieval-titled roles, from trusted title/industry
+  fields). Both signals are needed -- embedding similarity alone was
+  tested and found to score generic "I'm curious about ChatGPT"
+  candidates uncomfortably close to genuine ML engineers; the structured
+  signal fixes this. Full reasoning in the module docstring.
+
+A key design decision threading all three stages: **`career_history[].description`
+is never used for scoring or embedding anywhere in this codebase.**
+`check_description_shuffle.py` found that ~50%+ of candidates' description
+text doesn't match their own title/company -- it's drawn from a shared
+pool independent of the actual role. There's no field marking which
+descriptions are "real," so any use of this field would inject coin-flip
+noise into scoring. `profile.summary`, `profile.headline`, and
+career_history `title`/`company`/`industry`/`duration_months` are NOT
+shuffled and are the only text fields used.
+
+## Compute constraint (read this before running)
+
+Per `submission_spec.docx` Section 3, the ranking step has a hard budget:
+**<=5 minutes wall-clock, CPU-only, no GPU, no network calls.** This is
+why the pipeline is split into two stages:
+
+1. **`precompute.py`** -- slow, run once, NOT subject to the 5-minute
+   budget. Runs Stage A+B (~10-20s) and Stage C embeddings (measured
+   **73-127 minutes** on a CPU-only machine for the real 100K dataset).
+   Writes results to `data/processed/`.
+2. **`rank.py`** -- fast, this IS what gets reproduced at Stage 3. Loads
+   the precomputed caches, combines scores, sorts, writes the submission
+   CSV. Measured **~5 seconds** end-to-end, comfortably under budget.
+
+This split is explicitly permitted by the spec: *"If your system requires
+pre-computation..., pre-computation may exceed the 5-minute window, but
+the ranking step that produces the CSV must complete within it."*
+
+## How to reproduce the submission
+
+```bash
+pip install -r requirements.txt
+
+# Step 1: precompute (slow -- budget 1.5-2+ hours on CPU)
+python precompute.py --candidates data/raw/candidates.jsonl
+
+# Step 2: rank (fast -- completes in seconds)
+python rank.py --candidates data/raw/candidates.jsonl --out submission.csv
+
+# Step 3: validate
+python validate_submission.py submission.csv
 ```
-python tests/test_stage_a_b.py
+
+If you already have current caches in `data/processed/` (from a prior
+run) and only changed `rank.py` itself, skip the slow step:
+
+```bash
+python precompute.py --candidates data/raw/candidates.jsonl --skip-stage-ab --skip-stage-c
+python rank.py --candidates data/raw/candidates.jsonl --out submission.csv
 ```
 
-## Next steps
-1. Person A: write `src/load_candidates.py` (load candidates.jsonl.gz, run
-   Stage A + Stage B across all 100k, cache results).
-2. Person B: write `src/fit_scoring.py` — local embedding model (CPU-friendly,
-   e.g. sentence-transformers all-MiniLM-L6-v2), JD-vs-candidate similarity,
-   plus the "concept translation layer" for JD-stated equivalences (e.g.
-   "recommendation system" == "embeddings/retrieval experience" — see the
-   JD's own Tier-5 example in job_description.md's closing section).
-3. Person C: write `src/rank.py` (combine A+B+C scores, write CSV per spec,
-   generate reasoning strings), wire up `validate_submission.py` as a CI/local
-   check, deploy sandbox.
+##Repo layout
+
+```
+redrob_hackathon/
+├── README.md
+├── requirements.txt
+├── submission_metadata.yaml
+├── precompute.py              # Stage A+B+C precomputation (slow, run once)
+├── rank.py                    # Final ranking + CSV writer (fast, Stage-3-reproduced)
+├── validate_submission.py     # Organizer-provided validator
+│
+├── data/
+│   ├── raw/                   # Hackathon bundle, untouched (gitignored: candidates.jsonl)
+│   ├── processed/             # Precompute cache (gitignored, regenerable)
+│   └── manual_labels/         # Hand-labeled ground truth for calibration
+│
+├── src/
+│   ├── consistency_gate.py    # Stage A
+│   ├── jd_disqualifiers.py    # Stage B
+│   ├── fit_scoring.py         # Stage C
+│   └── load_candidates.py     # Standalone Stage A/B runner (used by precompute.py logic)
+│
+├── tests/
+│   ├── test_stage_a_b.py
+│   └── test_fit_scoring_sanity.py
+│
+└── check_*.py, score_fit.py   # Diagnostic scripts used during development
+                                 # (not part of the reproduction path, kept
+                                 # for methodology transparency -- see git
+                                 # history for the findings each one produced)
+```
+
+##Methodology notes / known limitations
+
+Documented honestly rather than hidden, since Stage 4/5 review weighs
+this:
+
+- **Stage A:** `title_history_mismatch` and `closed_source_no_validation`
+  fire at or near 0% on the real dataset -- confirmed via
+  `check_dead_rules_vocab.py` to be correctly dormant (their trigger
+  vocabulary doesn't exist in this dataset), not broken logic.
+- **Stage B:** `senior_no_recent_code` fires 0% -- confirmed the dataset's
+  44 distinct titles never include "architect"/"tech lead"/"principal."
+  `pure_research_no_production` is rare by design (research-marker base
+  rate is 0.14% of candidates).
+- **Stage C:** `RELEVANT_TITLE_MARKERS` excludes "Data Engineer" and
+  "Data Scientist" after checking real data -- both were initially
+  included as plausible-sounding guesses, but a full 100K run found
+  "Data Engineer" alone accounted for 73% of all relevant-fraction hits
+  despite the JD never naming data engineering as a relevant function.
+  Removed after verification; see git history for the before/after
+  numbers.
+- Weights (`CONSISTENCY_WEIGHT`/`FIT_WEIGHT` in `rank.py`,
+  `COSINE_WEIGHT`/`STRUCTURED_WEIGHT` in `fit_scoring.py`) are reasoned
+  choices, not empirically tuned against ground truth -- we don't have
+  labeled relevance tiers to tune against. `data/manual_labels/` is
+  intended for this once populated.
+
+## AI tool usage
+
+Built with substantial assistance from Claude (Anthropic) across
+architecture design, rule implementation, and debugging. Every bug fix
+and design decision in this repo was verified against real data from the
+actual 100K-candidate dataset before being trusted -- see git history for
+the iterative discover-test-fix pattern (e.g. `endorsement_inflation`'s
+threshold, `cv_speech_robotics_no_nlp`'s three-iteration fix, the
+tie-break and rounding-precision bugs in `rank.py`, all caught by running
+real diagnostics or the actual validator, not assumed from theory).
