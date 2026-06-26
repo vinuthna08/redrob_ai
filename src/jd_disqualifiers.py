@@ -47,17 +47,35 @@ class DisqualifierResult:
     multiplier: float = 1.0
     triggered_rules: list[str] = field(default_factory=list)
 
-
 def _all_text(candidate: dict) -> str:
-    """Concatenate every free-text field we might want to keyword-scan."""
+    """Concatenate free-text fields we trust for keyword scanning.
+
+    IMPORTANT: career_history[].description is deliberately EXCLUDED here.
+    Diagnostic check_description_shuffle.py found that ~50%+ of candidates'
+    description text does not match their own title/company -- it appears
+    to be drawn from a shared pool independent of the actual role (e.g. a
+    "Marketing Manager" entry with a description about Kafka pipelines).
+    There is no field that flags which descriptions are "real" vs shuffled,
+    so any description text is unreliable for any individual candidate and
+    must not be used for keyword-based disqualification -- a shuffled
+    description could incorrectly clear a pure-research candidate (if it
+    randomly contains "shipped"/"production") or incorrectly flag a strong
+    production engineer (if it randomly contains "research scientist"/"phd").
+
+    profile.summary and profile.headline are NOT shuffled -- verified by
+    manual inspection across dozens of real candidates, where summary text
+    consistently matches the candidate's own headline and current_title.
+    career_history title/company/industry fields are also NOT shuffled
+    (only description is) and remain safe to use elsewhere in this module.
+    """
     parts = [
         candidate.get("profile", {}).get("headline", ""),
         candidate.get("profile", {}).get("summary", ""),
     ]
     for h in candidate.get("career_history", []) or []:
         parts.append(h.get("title", ""))
-        parts.append(h.get("description", ""))
         parts.append(h.get("company", ""))
+        # h.get("description", "") deliberately omitted -- see docstring above.
     for c in candidate.get("certifications", []) or []:
         parts.append(c.get("name", ""))
     return " ".join(p.lower() for p in parts if p)
@@ -139,12 +157,52 @@ def rule_pure_services_career(candidate: dict) -> tuple[bool, float, str]:
 def rule_cv_speech_robotics_no_nlp(candidate: dict) -> tuple[bool, float, str]:
     """'People whose primary expertise is computer vision, speech, or
     robotics without significant NLP/IR exposure.'
+
+    FIXED (v2): the first fix rescoped detection from pooled text to
+    skills[] names, which solved the false-negative problem (0/100k fires)
+    but overcorrected into a false-positive problem (12.5% fired) -- it
+    flagged ANY candidate with a single incidental CV-adjacent skill
+    anywhere in their list, e.g. a strong recommendation-systems engineer
+    who happens to also have "Image Classification: advanced" as one of
+    seventeen skills. That is not "primary expertise," which is what the
+    JD actually says.
+
+    This version only counts skills at advanced/expert proficiency (the
+    meaningful-depth tier, not every skill listed) and requires
+    CV/speech/robotics-named skills to be the MAJORITY of that
+    meaningful-depth set, with zero NLP/IR-named skills at that same
+    depth. This distinguishes "this candidate's real technical center of
+    gravity is CV/speech/robotics" from "this candidate dabbles in one
+    CV-adjacent skill alongside broader, deeper NLP/IR expertise."
     """
-    text = _all_text(candidate)
-    has_cv_speech_robo = any(m in text for m in CV_SPEECH_ROBOTICS_MARKERS)
-    has_nlp_ir = any(m in text for m in NLP_IR_MARKERS)
-    if has_cv_speech_robo and not has_nlp_ir:
-        return True, 0.3, "CV/speech/robotics background with no NLP/IR exposure evident"
+    DEPTH_TIERS = {"advanced", "expert"}
+
+    deep_skills = [
+        s for s in (candidate.get("skills") or [])
+        if (s.get("proficiency") or "").lower() in DEPTH_TIERS
+    ]
+    if not deep_skills:
+        return False, 1.0, ""
+
+    deep_cv = [
+        s for s in deep_skills
+        if any(m in (s.get("name") or "").lower() for m in CV_SPEECH_ROBOTICS_MARKERS)
+    ]
+    deep_nlp = [
+        s for s in deep_skills
+        if any(m in (s.get("name") or "").lower() for m in NLP_IR_MARKERS)
+    ]
+
+    is_cv_dominant = len(deep_cv) > 2 and len(deep_cv) > len(deep_skills) / 2
+    has_no_nlp_depth = len(deep_nlp) == 0
+
+    if is_cv_dominant and has_no_nlp_depth:
+        cv_names = [s.get("name") for s in deep_cv[:3]]
+        return True, 0.3, (
+            f"CV/speech/robotics dominates advanced+ skills "
+            f"({len(deep_cv)}/{len(deep_skills)}: {', '.join(cv_names)}) "
+            f"with no NLP/IR skill at comparable depth"
+        )
     return False, 1.0, ""
 
 
