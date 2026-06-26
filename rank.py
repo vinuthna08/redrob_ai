@@ -96,19 +96,7 @@ def load_candidate_summaries(candidates_path: str) -> dict:
     return summaries
 
 
-def build_reasoning(
-    cid: str,
-    summary: dict,
-    entry: dict,
-    fit: dict,
-) -> str:
-    """Generate a specific, honest, non-templated reasoning string.
-
-    Per submission_spec.docx Section 3 (Stage 4 manual review checks):
-    must reference specific facts, connect to JD requirements, acknowledge
-    concerns honestly, never hallucinate, and vary substantively across
-    candidates -- not insert-the-name templating.
-    """
+def build_reasoning(cid, summary, entry, fit):
     title = summary.get("title", "unknown title")
     years = summary.get("years", 0)
     company = summary.get("company", "unknown company")
@@ -117,29 +105,61 @@ def build_reasoning(
 
     parts = [f"{title} at {company} with {years:.1f}y experience."]
 
+    # Career relevance
     if relevant_frac >= 0.99:
-        parts.append("Entire career history is in ML/AI/retrieval-relevant roles.")
+        parts.append("Entire career in ML/AI/retrieval-relevant roles.")
+    elif relevant_frac > 0.5:
+        parts.append(
+            f"Majority of career ({relevant_frac*100:.0f}%) in "
+            f"ML/AI/retrieval-relevant roles."
+        )
     elif relevant_frac > 0:
-        parts.append(f"{relevant_frac*100:.0f}% of career history is in ML/AI/retrieval-relevant roles.")
+        parts.append(
+            f"Partial ML/AI/retrieval career history "
+            f"({relevant_frac*100:.0f}% of months)."
+        )
     else:
-        parts.append("No career history in ML/AI/retrieval-relevant roles per title/industry.")
+        parts.append("No ML/AI/retrieval-relevant career history by title/industry.")
 
+    # Experience range vs JD's stated 5-9 year target
+    if 5.0 <= years <= 9.0:
+        parts.append("Experience within JD's stated 5-9 year target range.")
+    elif years > 9.0:
+        parts.append(
+            f"Experience ({years:.1f}y) above JD's stated range -- "
+            f"may over-qualify for founding-team dynamic."
+        )
+    else:
+        parts.append(
+            f"Experience ({years:.1f}y) below JD's stated range -- "
+            f"bar gets higher per spec."
+        )
+
+    # JD disqualifier concerns
     triggered = entry.get("jd_triggered_rules", [])
     if triggered:
         first_rule = triggered[0].split("]")[0].lstrip("[")
         parts.append(f"Concern: {first_rule.replace('_', ' ')}.")
 
+    # Consistency flags
     flags = entry.get("consistency_flags", [])
     if flags:
         first_flag = flags[0].split("]")[0].lstrip("[")
         parts.append(f"Consistency flag: {first_flag.replace('_', ' ')}.")
 
+    # Availability signals
     if response_rate < 0.1:
-        parts.append(f"Low recruiter response rate ({response_rate:.2f}) -- availability concern.")
+        parts.append(
+            f"Low recruiter response rate ({response_rate:.2f}) -- "
+            f"availability concern."
+        )
+    elif response_rate >= 0.7:
+        parts.append(f"Very strong recruiter response rate ({response_rate:.2f}).")
     elif response_rate >= 0.5:
         parts.append(f"Strong recruiter response rate ({response_rate:.2f}).")
 
     return " ".join(parts)
+
 
 
 def compute_final_score(
