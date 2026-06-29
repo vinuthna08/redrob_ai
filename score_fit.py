@@ -1,13 +1,3 @@
-"""
-score_fit.py — Stage C runner. Loads candidates, computes blended fit
-scores via fit_scoring.score_all, caches results, and prints a summary
-including a relevant_fraction breakdown by title so we can see which
-titles are landing in the taxonomy's gray zone before trusting it.
-
-Usage (from repo root):
-    python score_fit.py --candidates data/raw/candidates.jsonl
-"""
-
 import argparse
 import gzip
 import json
@@ -17,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from fit_scoring import score_all, save_cache, RELEVANT_TITLE_MARKERS  # noqa: E402
+from fit_scoring import score_all, save_cache, RELEVANT_TITLE_MARKERS 
 
 
 def load_candidates(path: str):
@@ -63,10 +53,7 @@ def main():
     print(f"  fraction == 1.0  (entire career relevant):       {full_frac} ({full_frac/len(fractions)*100:.1f}%)")
     print(f"  0 < fraction < 1 (partial/mixed career):         {partial_frac} ({partial_frac/len(fractions)*100:.1f}%)")
 
-    # Gray-zone surfacing: for candidates with PARTIAL fraction (mixed
-    # career), show which titles are driving the "relevant" portion, so
-    # we can sanity-check whether the taxonomy is catching the right
-    # titles or accidentally matching something too broad/narrow.
+    
     title_relevant_hits = defaultdict(int)
     for c in candidates:
         for h in c.get("career_history", []) or []:

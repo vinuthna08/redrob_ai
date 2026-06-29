@@ -1,5 +1,3 @@
-#Stage A / Stage B have zero dependencies beyond stdlib.
-# Add embedding/fit-scoring deps here as Person B builds Stage C, e.g.:
-# sentence-transformers
-# numpy
-# pandas
+gradio==6.19.0
+sentence-transformers
+torch

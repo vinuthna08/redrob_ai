@@ -1,31 +1,3 @@
-"""
-rank.py — the fast, Stage-3-reproduced ranking step.
-
-CRITICAL DESIGN CONSTRAINT (submission_spec.docx, Section 3 "Compute
-constraints"): this script must complete in <=5 minutes wall-clock,
-CPU-only, no GPU, no network calls, <=16GB RAM. It is reproduced inside a
-sandboxed Docker container at Stage 3; failure to reproduce within these
-limits disqualifies the submission REGARDLESS of composite score.
-
-This is why rank.py does NOT call sentence-transformers, does NOT run
-consistency_gate/jd_disqualifiers/fit_scoring live. Measured wall-clock
-for fit_scoring.score_all on the real 100k dataset was 73-127 minutes on
-this machine -- 15-25x over budget. All expensive computation (embedding
-generation, Stage A/B/C scoring) happens ONCE in precompute.py and is
-cached to data/processed/. rank.py ONLY loads those caches, combines
-scores, sorts, and writes the CSV -- dict lookups and arithmetic over
-100k items, which is fast.
-
-Usage (the exact command Stage 3 will run):
-    python rank.py --candidates ./candidates.jsonl --out ./submission.csv
-
-NOTE: --candidates is accepted for spec compliance (Section 10.3 requires
-a single command taking the candidates file as input) but rank.py reads
-candidate_ids and metadata for the reasoning column from the precomputed
-caches, not by re-parsing the full JSONL, to stay fast. If the caches
-don't exist yet, run precompute.py first -- this is documented in README.md.
-"""
-
 from __future__ import annotations
 import argparse
 import csv
@@ -38,13 +10,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-# Weights for combining Stage A consistency_score (0-100) and Stage C
-# fit_score (roughly 0-1, blended cosine+structured) into one final
-# composite. Stage B's multiplier is applied directly (multiplicative
-# dampening), not weighted-summed, since it represents independent
-# JD-stated penalty factors, not a competing signal.
-CONSISTENCY_WEIGHT = 0.3   # normalized to 0-1 scale (consistency_score / 100)
-FIT_WEIGHT = 0.7           # fit_score already roughly 0-1
+
+CONSISTENCY_WEIGHT = 0.3   
+FIT_WEIGHT = 0.7           
 
 TOP_N = 100
 
@@ -213,21 +181,7 @@ def main():
 
     print(f"  Excluded {excluded_honeypots} likely honeypots.")
 
-    # Sort by score descending, tie-break candidate_id ascending.
-    #
-    # CRITICAL: round to the SAME precision the CSV displays (4 decimals)
-    # BEFORE sorting, not after. An earlier version sorted on full-
-    # precision floats then wrote rounded values to the CSV -- two
-    # candidates whose scores differed only in the 5th+ decimal (e.g.
-    # 0.93070001 vs 0.93069998) sorted as genuinely distinct by their real
-    # values, but both rounded to 0.9307 in the CSV. The validator reads
-    # only the rounded CSV value, sees them as tied, and expects
-    # candidate_id-ascending order -- which the full-precision sort did
-    # NOT produce, since it ordered by the real (tiny, invisible-in-output)
-    # difference instead. Confirmed by running the actual validator twice:
-    # a candidate_id-ascending tiebreak alone did not fix this, because
-    # the ties the validator complained about were not visible as exact
-    # float equality until rounding was applied first.
+    
     rounded_scores = {cid: round(score, 4) for cid, score in scored}
     scored.sort(key=lambda x: (-rounded_scores[x[0]], x[0]))
 

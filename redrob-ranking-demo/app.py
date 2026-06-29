@@ -1,17 +1,3 @@
-"""
-app.py — Redrob Hackathon sandbox demo.
-
-Accepts up to 100 candidates as a JSON file upload, runs the full
-Stage A+B+C ranking pipeline end-to-end, and returns a ranked CSV.
-
-This is the small-sample sandbox required by submission_spec.docx
-Section 10.5. The full 100K precomputation (which takes 1.5-2+ hours
-on CPU) is NOT reproduced here -- Stage 3 reproduction uses the full
-codebase from the GitHub repo. This Space demonstrates that the ranking
-logic runs correctly end-to-end on a small sample within the 5-minute
-compute budget.
-"""
-
 import csv
 import io
 import json
@@ -22,10 +8,8 @@ from datetime import date, datetime
 import gradio as gr
 from sentence_transformers import SentenceTransformer, util
 
-# ── Model (loaded once at startup) ──────────────────────────────────────────
 MODEL = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# ── Stage C constants ────────────────────────────────────────────────────────
 COSINE_WEIGHT = 0.4
 STRUCTURED_WEIGHT = 0.6
 
@@ -66,7 +50,6 @@ SERVICES_FIRMS = {
 CONSISTENCY_WEIGHT = 0.3
 FIT_WEIGHT = 0.7
 
-# ── Stage A: consistency gate ─────────────────────────────────────────────────
 
 def _parse_date(s):
     if not s:
@@ -179,20 +162,17 @@ def score_consistency(c):
             "is_likely_honeypot": hard_flag or score < 40}
 
 
-# ── Stage B: JD disqualifiers ────────────────────────────────────────────────
 
 def apply_disqualifiers(c):
     history = c.get("career_history", []) or []
     multiplier = 1.0
     triggered = []
 
-    # pure services career
     companies = [(h.get("company") or "").lower() for h in history]
     if companies and all(any(sf in co for sf in SERVICES_FIRMS) for co in companies if co):
         multiplier *= 0.05
         triggered.append("[pure_services_career] entire career at services firms only")
 
-    # title chasing
     if len(history) >= 3:
         short = sum(1 for h in history if (h.get("duration_months") or 0) <= 18)
         seniority = {"senior", "staff", "principal", "lead"}
@@ -205,7 +185,6 @@ def apply_disqualifiers(c):
     return {"multiplier": multiplier, "jd_triggered_rules": triggered}
 
 
-# ── Stage C: fit scoring ──────────────────────────────────────────────────────
 
 def build_candidate_text(c):
     profile = c.get("profile", {})
@@ -291,7 +270,6 @@ def rank_candidates(candidates, model):
     return scored[:100]
 
 
-# ── Gradio UI ─────────────────────────────────────────────────────────────────
 
 def run_ranking(json_file):
     if json_file is None:
@@ -316,7 +294,6 @@ def run_ranking(json_file):
     except Exception as e:
         return f"Scoring error: {e}", None
 
-    # Write CSV to an in-memory string, then to a temp file Gradio can serve
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["candidate_id", "rank", "score", "reasoning"])

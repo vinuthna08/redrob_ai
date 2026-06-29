@@ -1,8 +1,4 @@
-"""
-Quick sanity tests using hand-built fixtures that mimic the real schema.
-Run: python -m pytest tests/test_stage_a_b.py -v
-(or just `python tests/test_stage_a_b.py` for a plain run without pytest)
-"""
+
 
 import sys
 from pathlib import Path
@@ -153,16 +149,7 @@ def run():
     print(f"JD multiplier: {result_b.multiplier} (triggered: {result_b.triggered_rules})")
     assert result_b.multiplier < 1.0, "Pure-services candidate should be down-weighted"
     print("PASS\n")
-    # Append these as Test 4 and Test 5 inside tests/test_stage_a_b.py, in the
-# same style/location as the existing Test 1-3 blocks (look for where
-# "All sanity tests passed." gets printed at the end, and insert before it).
-
-# ---------------------------------------------------------------------
-# Test 4: Single hard flag, otherwise clean -> must be honeypot
-# even though the remaining score (70) sits well inside the
-# "plausible but flagged" band under the old score-only logic.
-# ---------------------------------------------------------------------
-print("=== Test 4: Single hard flag (experience_arithmetic), otherwise clean ===")
+    print("=== Test 4: Single hard flag (experience_arithmetic), otherwise clean ===")
 candidate_4 = {
     "candidate_id": "CAND_TEST_0004",
     "profile": {
@@ -207,11 +194,6 @@ assert result_4.consistency_score == 70.0, (
 )
 print("PASS\n")
 
-# ---------------------------------------------------------------------
-# Test 5: Multiple soft flags stacking, no hard flags -> should still
-# fall back correctly to the score < 40 threshold rather than being
-# exempted just because no hard flag fired.
-# ---------------------------------------------------------------------
 print("=== Test 5: Only soft flags, but enough to cross the score threshold ===")
 candidate_5 = {
     "candidate_id": "CAND_TEST_0005",
@@ -232,14 +214,11 @@ candidate_5 = {
         {"name": "Salesforce CRM", "proficiency": "intermediate", "duration_months": 30}
     ],
     "redrob_signals": {
-        # endorsement_inflation: ratio 4.5 > 3.0 threshold -> soft, 15 pts
         "endorsements_received": 45,
         "connection_count": 10,
-        # activity_vs_availability: stale + near-zero response -> soft, 10 pts
         "open_to_work_flag": True,
         "last_active_date": "2025-01-01",
         "recruiter_response_rate": 0.02,
-        # verification_baseline: nothing verified -> soft, 5 pts
         "verified_email": False,
         "verified_phone": False,
         "linkedin_connected": False,
@@ -249,12 +228,6 @@ candidate_5 = {
 result_5 = score_candidate(candidate_5)
 print(f"Consistency score: {result_5.consistency_score} (flags: {result_5.flags})")
 print(f"Is likely honeypot: {result_5.is_likely_honeypot}")
-# 100 - 15 (endorsement_inflation) - 10 (activity_vs_availability)
-#     - 5 (verification_baseline) = 70 -> NOT below 40, so should NOT
-# be honeypot under the score-only fallback. This confirms three soft
-# flags stacking is treated as "flagged but not excluded" -- a
-# deliberately weaker bar than a single hard flag, which is the whole
-# point of the tiered design.
 assert result_5.is_likely_honeypot is False, (
     "Three soft flags totaling 30 points should NOT cross the honeypot "
     "bar on their own (score 70, still >= 40) -- soft signals require "

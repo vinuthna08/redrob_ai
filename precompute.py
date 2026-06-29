@@ -1,28 +1,3 @@
-"""
-precompute.py — single entry point for all expensive precomputation.
-
-Runs Stage A (consistency_gate) + Stage B (jd_disqualifiers) over the
-full candidate set, then Stage C (fit_scoring) embeddings, writing both
-caches to data/processed/. This step is NOT subject to the Stage 3
-5-minute compute budget -- only rank.py (which reads these caches) is.
-See rank.py's module docstring for why this split exists: fit_scoring's
-embedding step measured 73-127 minutes wall-clock on the real 100k
-dataset in this environment, 15-25x over the ranking-step budget.
-
-Usage:
-    python precompute.py --candidates data/raw/candidates.jsonl
-
-This is equivalent to running load_candidates.py then score_fit.py
-separately (those scripts still exist and work standalone for iteration/
-debugging), but precompute.py is the ONE command documented in README.md
-as the required precomputation step before rank.py can run.
-
-Expect this to take well over an hour on a CPU-only machine -- this is
-expected and allowed per submission_spec.docx Section 3: "If your system
-requires pre-computation..., pre-computation may exceed the 5-minute
-window, but the ranking step that produces the CSV must complete within it."
-"""
-
 from __future__ import annotations
 import argparse
 import gzip
@@ -33,9 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from consistency_gate import score_candidate  # noqa: E402
-from jd_disqualifiers import apply_disqualifiers  # noqa: E402
-from fit_scoring import score_all as fit_score_all, save_cache as save_fit_cache  # noqa: E402
+from consistency_gate import score_candidate 
+from jd_disqualifiers import apply_disqualifiers  
+from fit_scoring import score_all as fit_score_all, save_cache as save_fit_cache  
 
 
 def load_candidates(path: str):

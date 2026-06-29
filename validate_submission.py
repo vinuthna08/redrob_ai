@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Validate submission CSV per challenge rules (sections 2–3).
-Row 1 = header. Rows 2–101 = exactly 100 data rows. CSV only.
-"""
+
 
 import csv
 import re
@@ -34,7 +31,6 @@ def validate_submission(csv_path):
                 errors.append("Row 1 must be the header row; file is empty.")
                 return errors
 
-            # Row 1: column names and their order come from this line only
             if header != REQUIRED_HEADER:
                 errors.append(
                     "Row 1 (header) must be exactly:\n"

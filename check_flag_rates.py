@@ -1,14 +1,3 @@
-"""
-check_flag_rates.py — diagnostic only, not part of the pipeline.
-
-Runs every individual Stage A check across the full candidate set and
-prints a per-rule firing rate, so we can see which checks are dead vs
-working as intended (rather than just the aggregate honeypot count).
-
-Usage (from repo root):
-    python check_flag_rates.py --candidates data/raw/candidates.jsonl
-"""
-
 import argparse
 import gzip
 import json

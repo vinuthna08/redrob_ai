@@ -1,22 +1,3 @@
-"""
-consistency_gate.py — Stage A of the ranking pipeline.
-
-Detects candidates whose profile fields are individually schema-valid but
-*jointly implausible* (honeypots, keyword-stuffers, inflated profiles).
-
-Design principle (defend this in the interview):
-  We treat "is this profile real/plausible" as ORTHOGONAL to "is this a good
-  fit for the JD." A honeypot with perfect keyword overlap should not be
-  rankable purely on fit-similarity — it needs to be caught before fit
-  scoring ever runs, otherwise a well-faked profile can mathematically
-  outscore a real, slightly-weaker candidate.
-
-Each check below returns a (violated: bool, detail: str) pair so that every
-flag can be surfaced verbatim in the reasoning column later — no hidden
-logic, nothing the team can't explain line-by-line in a defend-your-work
-interview.
-"""
-
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -26,7 +7,7 @@ from typing import Any
 @dataclass
 class ConsistencyResult:
     candidate_id: str
-    consistency_score: float  # 0-100, higher = more plausible
+    consistency_score: float  
     flags: list[str] = field(default_factory=list)
     is_likely_honeypot: bool = False
 
@@ -51,7 +32,6 @@ def check_experience_arithmetic(candidate: dict) -> tuple[bool, str]:
     actual_months = sum(h.get("duration_months", 0) or 0 for h in history)
     actual_years = actual_months / 12.0
 
-    # Allow slack for overlap-free estimation error / concurrent roles.
     gap = claimed - actual_years
     if claimed > 1 and gap > max(2.0, claimed * 0.4):
         return True, (
@@ -71,9 +51,7 @@ def check_company_founding_vs_tenure(candidate: dict) -> tuple[bool, str]:
     This function is intentionally conservative: it only fires when we
     have external founding-year data, never guesses.
     """
-    # No founding-year data in candidate_schema.json — left as an extension
-    # point. Real implementation would join against a company->founded_year
-    # reference table built from public data for at least well-known names.
+   
     return False, ""
 
 
@@ -96,7 +74,6 @@ def check_skill_claim_vs_assessment(candidate: dict) -> tuple[bool, str]:
             if score is not None and score < 50:
                 contradictions.append(f"{name} (claimed expert, scored {score:.0f}/100)")
 
-    # Also flag implausibly many "expert" claims with near-zero usage duration.
     zero_duration_experts = [
         s.get("name", "") for s in skills
         if s.get("proficiency") == "expert" and (s.get("duration_months", 0) or 0) == 0
@@ -201,19 +178,6 @@ def check_title_vs_current_company_history(candidate: dict) -> tuple[bool, str]:
     return False, ""
 
 
-# Replace the CHECKS list and score_candidate function with the versions below.
-
-# Each check now carries a severity tier alongside its point penalty:
-#   "hard"  -> deterministic, no-benign-explanation evidence. A single hard
-#              flag is sufficient on its own to call a candidate a likely
-#              honeypot, regardless of the numeric score.
-#   "soft"  -> circumstantial evidence that's individually forgivable (lots
-#              of real, non-fraudulent candidates trip these) but still
-#              informative in combination with other flags.
-#
-# This directly encodes the design judgment: an 11-year experience gap or
-# an "expert" skill claim with zero months of usage needs no corroboration
-# to be disqualifying. An unverified email or a quiet job-seeker does.
 
 CHECKS = [
     ("experience_arithmetic", check_experience_arithmetic, 30, "hard"),

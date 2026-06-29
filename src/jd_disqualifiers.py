@@ -1,28 +1,11 @@
-"""
-jd_disqualifiers.py — Stage B of the ranking pipeline.
-
-These rules are pulled VERBATIM from explicit statements in job_description.md
-("Things we explicitly do NOT want" + "the disqualifiers we actually apply").
-This is the highest-leverage module in the whole system: the JD told us almost
-exactly what disqualifies a candidate. Most teams will treat the JD as
-unstructured text to embed; we treat it as a literal rulebook.
-
-Each rule returns (triggered: bool, weight: float, detail: str). Weight is a
-multiplicative dampener on the final fit score (1.0 = no penalty, 0.0 = hard
-exclude). Keeping these as explicit, named, multiplicative penalties (not a
-black-box score) is what makes this defensible in the Stage 5 interview.
-"""
-
 from __future__ import annotations
 from dataclasses import dataclass, field
 
-# Companies explicitly called out as "pure services" in the JD.
 SERVICES_FIRMS = {
     "tcs", "tata consultancy services", "infosys", "wipro", "accenture",
     "cognizant", "capgemini",
 }
 
-# Keyword sets used for cheap heuristic classification of career history text.
 RESEARCH_ONLY_MARKERS = {"research scientist", "research intern", "phd", "postdoc",
                           "research fellow", "academic"}
 PRODUCTION_MARKERS = {"shipped", "deployed", "production", "scaled", "launched",
@@ -75,7 +58,6 @@ def _all_text(candidate: dict) -> str:
     for h in candidate.get("career_history", []) or []:
         parts.append(h.get("title", ""))
         parts.append(h.get("company", ""))
-        # h.get("description", "") deliberately omitted -- see docstring above.
     for c in candidate.get("certifications", []) or []:
         parts.append(c.get("name", ""))
     return " ".join(p.lower() for p in parts if p)
@@ -106,9 +88,7 @@ def rule_recent_langchain_only(candidate: dict) -> tuple[bool, float, str]:
     has_wrapper_signal = any(m in text for m in LANGCHAIN_WRAPPER_MARKERS)
     has_pre_llm_depth = any(m in text for m in PRE_LLM_ML_MARKERS)
 
-    # Total experience as a rough proxy for "recent <12mo" — if total relevant
-    # AI-tagged experience is shallow and wrapper-shaped, and there's no
-    # pre-LLM ML depth elsewhere in the history, down-weight.
+    
     total_months = sum(h.get("duration_months", 0) or 0 for h in history)
     if has_wrapper_signal and not has_pre_llm_depth and total_months < 24:
         return True, 0.3, "LangChain/API-wrapper-shaped AI experience with no pre-LLM ML depth"
@@ -264,9 +244,7 @@ def rule_title_chasing_pattern(candidate: dict) -> tuple[bool, float, str]:
     return False, 1.0, ""
 
 
-# All rules, in order. Multipliers compound (multiply together), so multiple
-# triggered rules stack — a candidate can be down-weighted by several
-# independent JD-stated reasons simultaneously.
+
 RULES = [
     ("pure_research_no_production", rule_pure_research_no_production),
     ("recent_langchain_only", rule_recent_langchain_only),

@@ -1,15 +1,3 @@
-"""
-load_candidates.py — load the candidate pool and run the cheap, deterministic
-Stage A (consistency) + Stage B (JD disqualifiers) passes across all 100k,
-caching results to disk so the timed ranking step never has to recompute them.
-
-Usage:
-    python src/load_candidates.py --candidates data/raw/candidates.jsonl.gz
-
-This is NOT the timed ranking step — run this once, ahead of time, as part of
-precomputation. rank.py loads the cached output instead of re-running this.
-"""
-
 from __future__ import annotations
 import argparse
 import gzip
