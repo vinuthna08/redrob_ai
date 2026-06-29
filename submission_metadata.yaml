@@ -1,0 +1,106 @@
+# Redrob Hackathon — Submission Metadata Template
+#
+# Copy this file to your repo root as `submission_metadata.yaml` and fill it in.
+# The fields here should match what you submit via the portal at upload time.
+# Stage 3 review uses this file to verify your portal metadata.
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "The Odyssey"  # Used in leaderboard and announcements
+
+primary_contact:
+  name: "Vinuthna Perumandla"
+  email: "vinuthnaperumandla0805@gmail.com"   # Used for all organizer communication
+  phone: "+91-8341261613"        # Used for top-50 / top-10 outreach
+
+team_members:
+  - name: " Vinuthna Perumandla"
+    email: "vinuthnaperumandla0805@gmail.com"
+    role: " Team Lead , PipeLine Architecture , Stage A,B"          # Optional, e.g. "Team Lead", "Backend", "Data"
+  - name: "Peram Ruthvika"
+    email: "peramruthvika@gmail.com"
+    role: "Stage B , C Fit Scoring, Ranking Pipeline, Hugging Face Deployment & Demo Sandbox"
+  - name : "Ranganayakula Vishista"
+    email : "ranganayakulavishista42@gmail.com"
+    role : "End-to-End Workflow Monitoring, Testing, Validation & PPT Preparation"
+  # Add more members as needed; solo participants list just one member
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/vinuthna08/redrob_ai"
+# Required. Must be reachable. Private repos OK if you can grant organizer
+# access at Stage 3 (the email to add will be communicated then).
+
+sandbox_link: "https://huggingface.co/spaces/peramruthvika/redrob-ranking-demo"
+# Required. A working hosted environment where the ranker can be run on a small
+# candidate sample. See Section 10.5 of submission_spec.md for acceptable
+# platforms (HuggingFace Spaces, Streamlit Cloud, Replit, Colab, Docker, Binder).
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+# The single command that produces submission.csv from candidates.jsonl.
+# Should run end-to-end within 5 minutes on CPU with 16GB RAM and no network.
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Windows 11, Local Machine"                 # Or: "AWS EC2 c5.4xlarge", "Local Linux box", etc.
+  cpu_cores: 8                                  # Number of CPU cores used
+  ram_gb: 16                                    # Available RAM in GB
+  python_version: "3.13"                      # python --version
+  os: "Windows 11"                              # Or "Ubuntu 22.04 LTS", etc.
+  uses_gpu_for_inference: false                 # Must be false — see compute constraints
+  has_network_during_ranking: false             # Must be false — no API calls during ranking
+  pre_computation_required: true             # true if you pre-compute embeddings or train models offline
+  pre_computation_time_minutes: 120           # Approximate, if applicable
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+# Transparency only — declared use is NOT penalized. Be honest. Stage 5 interview
+# may verify these declarations against your code; declarations that contradict
+# your code or your interview are flagged.
+ai_tools_used:
+  - "Claude"        # e.g. for architecture discussion, code review
+  
+  # Other options: "ChatGPT", "Cursor", "Gemini", "Codeium", "Other", "None"
+
+ai_usage_summary: |
+    Used Claude (Anthropic) for rule implementation, debugging, and code review across all three pipeline
+    stages. 
+    Every design decision and bug fix was verified against real data from the actual 100K-candidate dataset before being trusted. 
+    No candidate data was fed to any hosted LLM during ranking. 
+    The ranking step (rank.py) has zero external dependencies and makes no network calls. 
+    sentence-transformers runs fully locally with a cached model.
+
+# ============================================================================
+# Approach summary (optional but recommended)
+# ============================================================================
+methodology_summary: |
+  Three-stage explainable pipeline. Stage A (consistency_gate.py): six
+  deterministic checks with tiered hard/soft evidence — a single hard flag
+  (e.g. 11-year experience gap, expert claims with zero months used) is
+  sufficient for honeypot exclusion; soft flags require accumulation. 46
+  honeypots excluded. Stage B (jd_disqualifiers.py): seven rules lifted
+  verbatim from the JD's explicit disqualifier sections, applied as
+  multiplicative penalties. Stage C (fit_scoring.py): blends
+  sentence-transformers cosine similarity on career narrative text with a
+  structured relevant_career_fraction signal (share of career months in
+  ML/AI/retrieval-titled roles from trusted title/industry fields).
+  career_history.description excluded from all scoring after diagnosing
+  ~50% shuffle rate. Cosine-similarity-alone was tested and found
+  insufficient; the structured signal was added after measurement, not
+  assumption. rank.py combines all three stages in ~5 seconds, well within
+  the 5-minute Stage 3 compute budget.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true        # I have read submission_spec.md in full
+  code_is_original_work: true       # My code is my team's original work (using AI as a tool is fine)
+  no_collusion: true                # I have not coordinated my submission with other teams
+  honeypot_check_done: true       # OPTIONAL — set true if you explicitly checked for honeypots in your ranking
+  reproduction_tested: true         # I have tested that my reproduce_command runs end-to-end
