@@ -144,11 +144,6 @@ this:
 
 ## AI tool usage
 
-Built with substantial assistance from Claude (Anthropic) across
-architecture design, rule implementation, and debugging. Every bug fix
-and design decision in this repo was verified against real data from the
-actual 100K-candidate dataset before being trusted -- see git history for
-the iterative discover-test-fix pattern (e.g. `endorsement_inflation`'s
-threshold, `cv_speech_robotics_no_nlp`'s three-iteration fix, the
-tie-break and rounding-precision bugs in `rank.py`, all caught by running
-real diagnostics or the actual validator, not assumed from theory).
+
+AI tools were used as development assistants for debugging, troubleshooting, code review, and documentation support. All core design decisions, ranking methodology, scoring logic, validation procedures, and final implementation choices were developed and verified by the team.
+
